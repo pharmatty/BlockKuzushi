@@ -1,6 +1,6 @@
 ﻿#include "raylib.h"
 
-typedef enum GameScreen { MENU, GAME, INSTRUCTIONS, EXIT } GameScreen;
+typedef enum GameScreen { MENU, GAME, INSTRUCTIONS, EXIT, GAME_WIN } GameScreen;
 
 #define SCREEN_WIDTH 1920
 #define SCREEN_HEIGHT 1080
@@ -120,6 +120,18 @@ int main(void)
             DrawGame(&paddle, &ball, bricks);
             EndDrawing();
         }
+        else if (currentScreen == GAME_WIN)
+        {
+            BeginDrawing();
+            ClearBackground(BLACK);
+            DrawText("You Win!", SCREEN_WIDTH / 2 - MeasureText("You Win!", 60) / 2, SCREEN_HEIGHT / 2, 60, GREEN);
+            EndDrawing();
+
+            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_ESCAPE))
+            {
+                currentScreen = MENU;
+            }
+        }
         else if (currentScreen == EXIT)
         {
             break;
@@ -199,6 +211,24 @@ void UpdateGame(Paddle *paddle, Ball *ball, Brick bricks[BRICK_ROWS][BRICK_COLUM
                     ball->speed.y *= -1;
                 }
             }
+        }
+
+        bool allBricksDestroyed = true;
+        for (int row = 0; row < BRICK_ROWS; row++)
+        {
+            for (int col = 0; col < BRICK_COLUMNS; col++)
+            {
+                if (bricks[row][col].active)
+                {
+                    allBricksDestroyed = false;
+                    break;
+                }
+            }
+        }
+
+        if (allBricksDestroyed)
+        {
+            *screen = GAME_WIN;
         }
 
         if (ball->position.y > SCREEN_HEIGHT)
