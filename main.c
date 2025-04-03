@@ -1,5 +1,6 @@
 ﻿#include "raylib.h"
 
+
 typedef enum GameScreen { MENU, GAME, INSTRUCTIONS, EXIT, GAME_WIN } GameScreen;
 
 #define SCREEN_WIDTH 1920
@@ -12,6 +13,9 @@ typedef enum GameScreen { MENU, GAME, INSTRUCTIONS, EXIT, GAME_WIN } GameScreen;
 #define BRICK_WIDTH 150
 #define BRICK_HEIGHT 40
 #define BRICK_SPACING 10
+
+int score = 0;
+int highScore = 0;
 
 typedef struct Ball {
     Vector2 position;
@@ -31,119 +35,15 @@ typedef struct Brick {
     Color color;
 } Brick;
 
-void InitGame(Paddle *paddle, Ball *ball, Brick bricks[BRICK_ROWS][BRICK_COLUMNS]);
-void UpdateGame(Paddle *paddle, Ball *ball, Brick bricks[BRICK_ROWS][BRICK_COLUMNS], GameScreen *screen);
-void DrawGame(Paddle *paddle, Ball *ball, Brick bricks[BRICK_ROWS][BRICK_COLUMNS]);
+typedef struct PowerUp {
+    Rectangle rect;
+    float fallSpeed;
+    bool active;
+} PowerUp;
 
-int main(void)
-{
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Block Kuzushi");
-    SetTargetFPS(60);
 
-    GameScreen currentScreen = MENU;
-    int selectedOption = 0;
-
-    Paddle paddle;
-    Ball ball;
-    Brick bricks[BRICK_ROWS][BRICK_COLUMNS];
-
-    while (!WindowShouldClose())
-    {
-        if (currentScreen == MENU)
-        {
-            if (IsKeyPressed(KEY_DOWN)) selectedOption = (selectedOption + 1) % 3;
-            if (IsKeyPressed(KEY_UP)) selectedOption = (selectedOption - 1 + 3) % 3;
-
-            if (IsKeyPressed(KEY_ENTER))
-            {
-                if (selectedOption == 0)
-                {
-                    InitGame(&paddle, &ball, bricks);
-                    currentScreen = GAME;
-                }
-                else if (selectedOption == 1)
-                {
-                    currentScreen = INSTRUCTIONS;
-                }
-                else if (selectedOption == 2)
-                {
-                    currentScreen = EXIT;
-                }
-            }
-
-            BeginDrawing();
-            ClearBackground(BLACK);
-
-            int titleSize = 90;
-            int titleWidth = MeasureText("Block Kuzushi", titleSize);
-            DrawText("Block Kuzushi", (SCREEN_WIDTH - titleWidth) / 2, 300, titleSize, WHITE);
-
-            int optionSize = 50;
-            Color startColor = selectedOption == 0 ? YELLOW : WHITE;
-            Color instructionsColor = selectedOption == 1 ? YELLOW : WHITE;
-            Color quitColor = selectedOption == 2 ? YELLOW : WHITE;
-
-            DrawText("Start Game", (SCREEN_WIDTH - MeasureText("Start Game", optionSize)) / 2, 500, optionSize, startColor);
-            DrawText("Instructions", (SCREEN_WIDTH - MeasureText("Instructions", optionSize)) / 2, 600, optionSize, instructionsColor);
-            DrawText("Quit", (SCREEN_WIDTH - MeasureText("Quit", optionSize)) / 2, 700, optionSize, quitColor);
-
-            int creditsSize = 30;
-            int creditsWidth = MeasureText("Made by Mathias Novakovic | GP24 Forsbergs Skola", creditsSize);
-            DrawText("Made by Mathias Novakovic | GP24 Forsbergs Skola",
-                     (SCREEN_WIDTH - creditsWidth) / 2, SCREEN_HEIGHT - 50, creditsSize, GRAY);
-
-            EndDrawing();
-        }
-        else if (currentScreen == INSTRUCTIONS)
-        {
-            if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_ENTER))
-            {
-                currentScreen = MENU;
-            }
-
-            BeginDrawing();
-            ClearBackground(BLACK);
-
-            int instructionSize = 40;
-            DrawText("Instructions", (SCREEN_WIDTH - MeasureText("Instructions", 60)) / 2, 200, 60, WHITE);
-            DrawText("Use Left/Right Arrow Keys to Move", 500, 400, instructionSize, WHITE);
-            DrawText("Press ESC to return to Menu", 500, 500, instructionSize, WHITE);
-
-            EndDrawing();
-        }
-        else if (currentScreen == GAME)
-        {
-            UpdateGame(&paddle, &ball, bricks, &currentScreen);
-
-            BeginDrawing();
-            ClearBackground(BLACK);
-            DrawGame(&paddle, &ball, bricks);
-            EndDrawing();
-        }
-        else if (currentScreen == GAME_WIN)
-        {
-            BeginDrawing();
-            ClearBackground(BLACK);
-            DrawText("You Win!", SCREEN_WIDTH / 2 - MeasureText("You Win!", 60) / 2, SCREEN_HEIGHT / 2, 60, GREEN);
-            EndDrawing();
-
-            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_ESCAPE))
-            {
-                currentScreen = MENU;
-            }
-        }
-        else if (currentScreen == EXIT)
-        {
-            break;
-        }
-    }
-
-    CloseWindow();
-    return 0;
-}
-
-void InitGame(Paddle *paddle, Ball *ball, Brick bricks[BRICK_ROWS][BRICK_COLUMNS])
-{
+void InitGame(Paddle *paddle, Ball *ball, Brick bricks[BRICK_ROWS][BRICK_COLUMNS], PowerUp *powerUp) {
+    score = 0;
     paddle->rect = (Rectangle){ SCREEN_WIDTH / 2 - PADDLE_WIDTH / 2, SCREEN_HEIGHT - 100, PADDLE_WIDTH, PADDLE_HEIGHT };
     paddle->speed = 600.0f;
 
@@ -160,22 +60,23 @@ void InitGame(Paddle *paddle, Ball *ball, Brick bricks[BRICK_ROWS][BRICK_COLUMNS
         (Color){160, 80, 200, 255}
     };
 
-    for (int row = 0; row < BRICK_ROWS; row++)
-    {
-        for (int col = 0; col < BRICK_COLUMNS; col++)
-        {
-            bricks[row][col].rect.x = col * (BRICK_WIDTH + BRICK_SPACING) + 100;
-            bricks[row][col].rect.y = row * (BRICK_HEIGHT + BRICK_SPACING) + 100;
-            bricks[row][col].rect.width = BRICK_WIDTH;
-            bricks[row][col].rect.height = BRICK_HEIGHT;
+    for (int row = 0; row < BRICK_ROWS; row++) {
+        for (int col = 0; col < BRICK_COLUMNS; col++) {
+            bricks[row][col].rect = (Rectangle){
+                col * (BRICK_WIDTH + BRICK_SPACING) + 100,
+                row * (BRICK_HEIGHT + BRICK_SPACING) + 100,
+                BRICK_WIDTH, BRICK_HEIGHT
+            };
             bricks[row][col].active = true;
             bricks[row][col].color = rainbowColors[row % 5];
         }
     }
+
+    powerUp->active = false;
 }
 
-void UpdateGame(Paddle *paddle, Ball *ball, Brick bricks[BRICK_ROWS][BRICK_COLUMNS], GameScreen *screen)
-{
+
+void UpdateGame(Paddle *paddle, Ball *ball, Brick bricks[BRICK_ROWS][BRICK_COLUMNS], GameScreen *screen, PowerUp *powerUp) {
     if (IsKeyPressed(KEY_ESCAPE)) *screen = MENU;
 
     if (IsKeyDown(KEY_LEFT) && paddle->rect.x > 0)
@@ -184,8 +85,7 @@ void UpdateGame(Paddle *paddle, Ball *ball, Brick bricks[BRICK_ROWS][BRICK_COLUM
     if (IsKeyDown(KEY_RIGHT) && paddle->rect.x < SCREEN_WIDTH - PADDLE_WIDTH)
         paddle->rect.x += paddle->speed * GetFrameTime();
 
-    if (ball->active)
-    {
+    if (ball->active) {
         ball->position.x += ball->speed.x;
         ball->position.y += ball->speed.y;
 
@@ -195,63 +95,194 @@ void UpdateGame(Paddle *paddle, Ball *ball, Brick bricks[BRICK_ROWS][BRICK_COLUM
         if (ball->position.y - ball->radius <= 0)
             ball->speed.y *= -1;
 
-        if (CheckCollisionCircleRec(ball->position, ball->radius, paddle->rect))
-        {
+        if (CheckCollisionCircleRec(ball->position, ball->radius, paddle->rect)) {
             ball->speed.y *= -1;
             ball->position.y = paddle->rect.y - ball->radius;
         }
 
-        for (int row = 0; row < BRICK_ROWS; row++)
-        {
-            for (int col = 0; col < BRICK_COLUMNS; col++)
-            {
-                if (bricks[row][col].active && CheckCollisionCircleRec(ball->position, ball->radius, bricks[row][col].rect))
-                {
+
+        for (int row = 0; row < BRICK_ROWS; row++) {
+            for (int col = 0; col < BRICK_COLUMNS; col++) {
+                if (bricks[row][col].active && CheckCollisionCircleRec(ball->position, ball->radius, bricks[row][col].rect)) {
                     bricks[row][col].active = false;
                     ball->speed.y *= -1;
+                    score += 100;
+                    if (score > highScore) highScore = score;
+
+
+                    if (!powerUp->active && GetRandomValue(0, 100) < 20) {
+                        powerUp->active = true;
+                        powerUp->rect.width = 30;
+                        powerUp->rect.height = 30;
+
+                        powerUp->rect.x = bricks[row][col].rect.x + bricks[row][col].rect.width / 2 - powerUp->rect.width / 2;
+                        powerUp->rect.y = bricks[row][col].rect.y + bricks[row][col].rect.height / 2 - powerUp->rect.height / 2;
+                        powerUp->fallSpeed = 300.0f;
+                    }
                 }
             }
         }
 
+
+        if (powerUp->active) {
+            powerUp->rect.y += powerUp->fallSpeed * GetFrameTime();
+
+            if (CheckCollisionRecs(paddle->rect, powerUp->rect)) {
+                paddle->speed += 200.0f;
+                powerUp->active = false;
+            }
+
+            if (powerUp->rect.y > SCREEN_HEIGHT) {
+                powerUp->active = false;
+            }
+        }
+
+
         bool allBricksDestroyed = true;
-        for (int row = 0; row < BRICK_ROWS; row++)
-        {
-            for (int col = 0; col < BRICK_COLUMNS; col++)
-            {
-                if (bricks[row][col].active)
-                {
+        for (int row = 0; row < BRICK_ROWS; row++) {
+            for (int col = 0; col < BRICK_COLUMNS; col++) {
+                if (bricks[row][col].active) {
                     allBricksDestroyed = false;
                     break;
                 }
             }
         }
-
-        if (allBricksDestroyed)
-        {
+        if (allBricksDestroyed) {
             *screen = GAME_WIN;
         }
 
-        if (ball->position.y > SCREEN_HEIGHT)
-        {
+        if (ball->position.y > SCREEN_HEIGHT) {
             ball->active = false;
             *screen = MENU;
         }
     }
 }
 
-void DrawGame(Paddle *paddle, Ball *ball, Brick bricks[BRICK_ROWS][BRICK_COLUMNS])
-{
+
+void DrawGame(Paddle *paddle, Ball *ball, Brick bricks[BRICK_ROWS][BRICK_COLUMNS], PowerUp *powerUp) {
     DrawRectangleRec(paddle->rect, WHITE);
 
     if (ball->active)
         DrawCircleV(ball->position, ball->radius, ORANGE);
 
-    for (int row = 0; row < BRICK_ROWS; row++)
-    {
-        for (int col = 0; col < BRICK_COLUMNS; col++)
-        {
+    for (int row = 0; row < BRICK_ROWS; row++) {
+        for (int col = 0; col < BRICK_COLUMNS; col++) {
             if (bricks[row][col].active)
                 DrawRectangleRec(bricks[row][col].rect, bricks[row][col].color);
         }
     }
+
+
+    if (powerUp->active) {
+        DrawRectangleRec(powerUp->rect, YELLOW);
+    }
+
+    DrawText(TextFormat("Score: %d", score), 50, 50, 40, WHITE);
+    DrawText(TextFormat("High Score: %d", highScore), 50, 100, 40, WHITE);
+}
+
+int main(void) {
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Block Kuzushi");
+    SetTargetFPS(60);
+
+    GameScreen currentScreen = MENU;
+    int menuSelection = 0;
+
+    Paddle paddle;
+    Ball ball;
+    Brick bricks[BRICK_ROWS][BRICK_COLUMNS];
+    PowerUp speedPowerUp;
+    speedPowerUp.active = false;
+
+    while (!WindowShouldClose()) {
+
+        switch (currentScreen) {
+            case MENU:
+
+                if (IsKeyPressed(KEY_DOWN)) {
+                    menuSelection++;
+                    if (menuSelection > 2) menuSelection = 0;
+                }
+                if (IsKeyPressed(KEY_UP)) {
+                    menuSelection--;
+                    if (menuSelection < 0) menuSelection = 2;
+                }
+                if (IsKeyPressed(KEY_ENTER)) {
+                    switch (menuSelection) {
+                        case 0:
+                            InitGame(&paddle, &ball, bricks, &speedPowerUp);
+                            currentScreen = GAME;
+                            break;
+                        case 1:
+                            currentScreen = INSTRUCTIONS;
+                            break;
+                        case 2:
+                            currentScreen = EXIT;
+                            break;
+                    }
+                }
+                break;
+            case INSTRUCTIONS:
+                if (IsKeyPressed(KEY_BACKSPACE)) {
+                    currentScreen = MENU;
+                }
+                break;
+            case GAME:
+                UpdateGame(&paddle, &ball, bricks, &currentScreen, &speedPowerUp);
+                break;
+            case GAME_WIN:
+                if (IsKeyPressed(KEY_ENTER)) {
+                    currentScreen = MENU;
+                }
+                break;
+            case EXIT:
+                CloseWindow();
+                return 0;
+        }
+
+        BeginDrawing();
+        ClearBackground(BLACK);
+
+        switch (currentScreen) {
+            case MENU: {
+                const char *menuTitle = "Block Kuzushi";
+                DrawText(menuTitle, SCREEN_WIDTH / 2 - MeasureText(menuTitle, 60) / 2, SCREEN_HEIGHT / 2 - 150, 60, WHITE);
+
+                const char *menuOptions[3] = { "Start Game", "Instructions", "Quit Game" };
+                for (int i = 0; i < 3; i++) {
+                    int textWidth = MeasureText(menuOptions[i], 40);
+                    int posY = SCREEN_HEIGHT / 2 - 50 + i * 50;
+                    if (i == menuSelection) {
+
+                        DrawText(">", SCREEN_WIDTH / 2 - textWidth / 2 - 50, posY, 40, YELLOW);
+                        DrawText(menuOptions[i], SCREEN_WIDTH / 2 - textWidth / 2 - 20, posY, 40, YELLOW);
+                    } else {
+                        DrawText(menuOptions[i], SCREEN_WIDTH / 2 - textWidth / 2, posY, 40, WHITE);
+                    }
+                }
+                DrawText("Credits: Mathias Novakovic Forsberg Skola GP24",
+                         SCREEN_WIDTH / 2 - MeasureText("Credits: Mathias Novakovic Forsberg GP24", 20) / 2,
+                         SCREEN_HEIGHT - 50, 20, WHITE);
+            } break;
+            case INSTRUCTIONS:
+                DrawText("Use LEFT and RIGHT arrow keys to move the paddle.", 100, 100, 30, WHITE);
+                DrawText("Destroy bricks to score points.", 100, 150, 30, WHITE);
+                DrawText("Catch the yellow power up to increase paddle speed.", 100, 200, 30, WHITE);
+                DrawText("Press BACKSPACE to go back.", 100, 250, 30, WHITE);
+                break;
+            case GAME:
+                DrawGame(&paddle, &ball, bricks, &speedPowerUp);
+                break;
+            case GAME_WIN:
+                DrawText("You win! Press ENTER to return to menu.",
+                         SCREEN_WIDTH / 2 - MeasureText("You win! Press ENTER to return to menu.", 40) / 2,
+                         SCREEN_HEIGHT / 2, 40, WHITE);
+                break;
+            default:
+                break;
+        }
+        EndDrawing();
+    }
+    CloseWindow();
+    return 0;
 }
